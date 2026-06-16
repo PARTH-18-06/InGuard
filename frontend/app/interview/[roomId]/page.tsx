@@ -94,6 +94,7 @@ export default function InterviewRoomPage() {
   ]);
   const [duration, setDuration] = useState(0);
   const [isConnecting, setIsConnecting] = useState(true);
+  const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState("");
   const [isHydrated, setIsHydrated] = useState(false);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
@@ -211,6 +212,21 @@ export default function InterviewRoomPage() {
   };
 
   const generateInterviewReport = async () => {
+    if (overallScore === 0 && sessionAlertsRef.current.length === 0) {
+      setAiReport({
+        overallScore: 0,
+        recommendation: "Session Invalid",
+        behavioralAssessment: "No valid interview data was collected. Camera or microphone was not active during this session.",
+        suspiciousActivities: [],
+        weakPoints: ["No camera data collected", "Session did not start properly"],
+        strongPoints: [],
+        courseRecommendations: [],
+        summary: "This session could not be evaluated because no monitoring data was collected. Please retry with camera and microphone enabled.",
+      });
+      setShowReport(true);
+      setIsGeneratingReport(false);
+      return;
+    }
     setIsGeneratingReport(true);
     try {
       const apiKey = process.env.NEXT_PUBLIC_GROQ_API_KEY;
@@ -606,6 +622,7 @@ Return ONLY valid JSON, no markdown, no explanation:
 
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = stream;
+          setCameraReady(true);
 
           try {
             await localVideoRef.current.play();
@@ -639,6 +656,7 @@ Return ONLY valid JSON, no markdown, no explanation:
         setTrustScore(0);
         setConnectionStatus("error");
         setCameraError("Camera access denied. Please allow camera permissions and refresh.");
+        setConnectionStatus("error");
         addAlert(
           "Camera access denied. Please allow camera permissions and refresh.",
           "danger",
@@ -884,6 +902,18 @@ Return ONLY valid JSON, no markdown, no explanation:
               className="h-11 rounded-full bg-red-600 px-5 text-white hover:bg-red-700"
               onClick={async () => {
                 if (user?.role === "recruiter") {
+                  if (!cameraReady) {
+                    const confirmEnd = window.confirm(
+                      "Camera was not active during this session. End call without generating report?"
+                    );
+                    if (confirmEnd) {
+                      socketRef.current?.emit("leave-room", { roomId, userId: user?.id });
+                      if (peerRef.current) { peerRef.current.close(); peerRef.current = null; }
+                      if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); }
+                      window.location.href = "/dashboard/recruiter";
+                    }
+                    return;
+                  }
                   await generateInterviewReport();
                 } else {
                   socketRef.current?.emit("leave-room", { roomId, userId: user?.id });
@@ -968,13 +998,14 @@ Return ONLY valid JSON, no markdown, no explanation:
               </div>
               <div className="flex items-center justify-between gap-4">
                 <span className="text-gray-400">Status</span>
-                <span className={`px-2 py-1 rounded-full text-xs font-medium text-white ${
-                  connectionStatus === 'live' ? 'bg-green-500' :
-                  connectionStatus === 'error' ? 'bg-red-500' : 
-                  'bg-blue-500'
+                <span className={`px-2 py-1 rounded-full text-xs font-semibold text-white ${
+                  connectionStatus === "live" ? "bg-green-500" :
+                  connectionStatus === "error" ? "bg-red-500" :
+                  "bg-blue-500"
                 }`}>
-                  {connectionStatus === 'live' ? 'Live' : 
-                   connectionStatus === 'error' ? 'Error' : 'Connecting'}
+                  {connectionStatus === "live" ? "Live" :
+                   connectionStatus === "error" ? "Error" :
+                   "Connecting"}
                 </span>
               </div>
               <div className="flex items-center justify-between gap-4">

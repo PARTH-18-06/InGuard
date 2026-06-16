@@ -1,0 +1,45 @@
+{
+  "name": "inguard1-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3001",
+    "build": "next build",
+    "start": "next start -p 3001",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^3.10.0",
+    "@radix-ui/react-dialog": "^1.1.15",
+    "@radix-ui/react-label": "^2.1.1",
+    "@radix-ui/react-select": "^2.1.2",
+    "@radix-ui/react-slot": "^1.1.1",
+    "@tensorflow/tfjs": "^4.22.0",
+    "axios": "^1.8.2",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "face-api.js": "^0.22.2",
+    "lucide-react": "^0.468.0",
+    "next": "14.2.35",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-hook-form": "^7.54.2",
+    "simple-peer": "^9.11.1",
+    "socket.io-client": "^4.8.1",
+    "tailwind-merge": "^2.5.5",
+    "zod": "^3.24.1",
+    "zustand": "^5.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@types/simple-peer": "^9.11.9",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "14.2.35",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.3"
+  }
+}

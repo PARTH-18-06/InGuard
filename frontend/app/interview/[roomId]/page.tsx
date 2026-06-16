@@ -77,6 +77,7 @@ export default function InterviewRoomPage() {
   const durationRef = useRef<number>(0);
   const lastAlertTimeRef = useRef<Record<string, number>>({});
   const lastNoiseAlert = useRef<number>(0);
+  const sessionAlertsRef = useRef<string[]>([]);
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOn, setIsCameraOn] = useState(true);
   const [focusScore, setFocusScore] = useState(50);
@@ -97,6 +98,18 @@ export default function InterviewRoomPage() {
   const [isHydrated, setIsHydrated] = useState(false);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [peerConnected, setPeerConnected] = useState(false);
+  const [showReport, setShowReport] = useState(false);
+  const [aiReport, setAiReport] = useState<{
+    overallScore: number;
+    recommendation: string;
+    behavioralAssessment: string;
+    suspiciousActivities: string[];
+    weakPoints: string[];
+    strongPoints: string[];
+    courseRecommendations: { title: string; platform: string; url: string; reason: string }[];
+    summary: string;
+  } | null>(null);
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<
     "connecting" | "live" | "error"
   >("connecting");
@@ -119,6 +132,7 @@ export default function InterviewRoomPage() {
       },
       ...prev,
     ].slice(0, 10));
+    sessionAlertsRef.current.push(message);
   };
 
   const roomId = params.roomId;
@@ -196,6 +210,85 @@ export default function InterviewRoomPage() {
     return pc;
   };
 
+  const generateInterviewReport = async () => {
+    setIsGeneratingReport(true);
+    try {
+      const apiKey = process.env.NEXT_PUBLIC_GROQ_API_KEY;
+      const sessionDuration = durationRef.current;
+      const minutes = Math.floor(sessionDuration / 60);
+      const seconds = sessionDuration % 60;
+      const durationStr = `${minutes}m ${seconds}s`;
+
+      const suspiciousCount = sessionAlertsRef.current.length;
+      const faceAlerts = sessionAlertsRef.current.filter(a => a.includes('Face')).length;
+      const noiseAlerts = sessionAlertsRef.current.filter(a => a.includes('noise')).length;
+      const tabAlerts = sessionAlertsRef.current.filter(a => a.includes('Tab')).length;
+
+      const prompt = `You are an expert HR analyst. Analyze this interview monitoring data and generate a report.
+
+Interview Data:
+- Duration: ${durationStr}
+- Final Focus Score: ${focusScore}/100
+- Final Confidence Score: ${confidenceScore}/100  
+- Final Trust Score: ${trustScore}/100
+- Final Overall Score: ${overallScore}/100
+- Total Suspicious Alerts: ${suspiciousCount}
+- Face Not Visible Alerts: ${faceAlerts}
+- Background Noise Alerts: ${noiseAlerts}
+- Tab Switch Alerts: ${tabAlerts}
+
+Return ONLY valid JSON, no markdown, no explanation:
+{
+  "overallScore": 75,
+  "recommendation": "Recommended for next round" or "Not recommended" or "Consider with reservations",
+  "behavioralAssessment": "2-3 sentence assessment of candidate behavior during interview",
+  "suspiciousActivities": ["activity 1", "activity 2"],
+  "weakPoints": ["weak point 1", "weak point 2", "weak point 3"],
+  "strongPoints": ["strong point 1", "strong point 2"],
+  "courseRecommendations": [
+    {"title": "Course Name", "platform": "Udemy", "url": "https://udemy.com", "reason": "why helpful"}
+  ],
+  "summary": "Overall 2-3 sentence summary of the candidate performance"
+}`;
+
+      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: "llama-3.3-70b-versatile",
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.3,
+          max_tokens: 1000,
+        }),
+      });
+
+      const data = await response.json();
+      const text = data.choices?.[0]?.message?.content || "";
+      const clean = text.replace(/```json|```/g, "").trim();
+      const report = JSON.parse(clean);
+      setAiReport(report);
+      setShowReport(true);
+    } catch (err) {
+      console.error("Report generation failed:", err);
+      setAiReport({
+        overallScore: overallScore,
+        recommendation: overallScore >= 70 ? "Recommended for next round" : "Consider with reservations",
+        behavioralAssessment: "The candidate completed the interview session.",
+        suspiciousActivities: sessionAlertsRef.current.slice(0, 5),
+        weakPoints: ["Detailed analysis unavailable"],
+        strongPoints: ["Completed the interview"],
+        courseRecommendations: [],
+        summary: `Candidate scored ${overallScore}/100 overall during a ${Math.floor(durationRef.current/60)} minute session.`,
+      });
+      setShowReport(true);
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  };
+
   useEffect(() => {
     const overall = Math.round((focusScore + confidenceScore + trustScore) / 3);
     setOverallScore(overall);
@@ -252,6 +345,7 @@ export default function InterviewRoomPage() {
           { id: String(now), message: '📱 Tab switch detected', type: 'danger', timestamp: ts },
           ...prev
         ].slice(0, 10));
+        sessionAlertsRef.current.push("Tab switch detected");
         setTrustScore(prev => Math.max(0, prev - 15));
       }
       if (!hidden) alreadyHidden = false;
@@ -490,6 +584,7 @@ export default function InterviewRoomPage() {
             { id: String(now), message: '🔊 Background noise detected', type: 'warning', timestamp: ts },
             ...prev
           ].slice(0, 10));
+          sessionAlertsRef.current.push("Background noise detected");
           setTrustScore(prev => Math.max(0, prev - 3));
         }
       }, 3000);
@@ -630,6 +725,7 @@ export default function InterviewRoomPage() {
       const setA = (window as any).__inguardSetAlerts;
       const setT = (window as any).__inguardSetTrust;
       if (setA) setA((prev: any) => [{ id: Math.random().toString(36), message: '📱 Tab switch detected', type: 'danger', timestamp: ts }, ...prev].slice(0, 10));
+      sessionAlertsRef.current.push("Tab switch detected");
       if (setT) setT((prev: number) => Math.max(0, prev - 15));
     });
   }
@@ -786,11 +882,31 @@ export default function InterviewRoomPage() {
             <Button
               aria-label="End call"
               className="h-11 rounded-full bg-red-600 px-5 text-white hover:bg-red-700"
-              onClick={handleEndCall}
+              onClick={async () => {
+                if (user?.role === "recruiter") {
+                  await generateInterviewReport();
+                } else {
+                  socketRef.current?.emit("leave-room", { roomId, userId: user?.id });
+                  if (peerRef.current) { peerRef.current.close(); peerRef.current = null; }
+                  if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); }
+                  window.location.href = "/dashboard/candidate";
+                }
+              }}
               title="End call"
             >
-              <Phone className="mr-2 h-5 w-5" />
-              End Call
+              {isGeneratingReport ? (
+                <span className="flex items-center gap-2">
+                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                  </svg>
+                  Generating Report...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <Phone className="h-4 w-4" /> End Call
+                </span>
+              )}
             </Button>
           </div>
         </section>
@@ -870,6 +986,118 @@ export default function InterviewRoomPage() {
             </CardContent>
           </Card>
         </aside>
+
+        {showReport && aiReport && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+            <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-gray-900 p-6 shadow-2xl">
+              <div className="mb-6 flex items-center justify-between">
+                <h2 className="text-xl font-bold text-white">Interview Report</h2>
+                <div className={`rounded-full px-4 py-1 text-sm font-semibold ${
+                  aiReport.recommendation === "Recommended for next round"
+                    ? "bg-green-500/20 text-green-400"
+                    : aiReport.recommendation === "Not recommended"
+                    ? "bg-red-500/20 text-red-400"
+                    : "bg-yellow-500/20 text-yellow-400"
+                }`}>
+                  {aiReport.recommendation}
+                </div>
+              </div>
+
+              <div className="mb-6 flex items-center justify-center">
+                <div className={`flex h-24 w-24 items-center justify-center rounded-full text-3xl font-bold text-white ${
+                  aiReport.overallScore >= 70 ? "bg-green-500" :
+                  aiReport.overallScore >= 40 ? "bg-yellow-500" : "bg-red-500"
+                }`}>
+                  {aiReport.overallScore}
+                </div>
+              </div>
+
+              <p className="mb-6 text-center text-sm text-gray-400">{aiReport.summary}</p>
+
+              <div className="mb-4 rounded-xl bg-gray-800 p-4">
+                <h3 className="mb-2 text-sm font-semibold text-gray-300">Behavioral Assessment</h3>
+                <p className="text-sm text-gray-400">{aiReport.behavioralAssessment}</p>
+              </div>
+
+              <div className="mb-4 grid gap-4 md:grid-cols-2">
+                <div className="rounded-xl bg-gray-800 p-4">
+                  <h3 className="mb-3 text-sm font-semibold text-green-400">Strong Points</h3>
+                  {aiReport.strongPoints.map((p, i) => (
+                    <div key={i} className="mb-1 flex items-start gap-2 text-sm text-gray-400">
+                      <span className="mt-0.5 text-green-400">✓</span>{p}
+                    </div>
+                  ))}
+                </div>
+                <div className="rounded-xl bg-gray-800 p-4">
+                  <h3 className="mb-3 text-sm font-semibold text-red-400">Weak Points</h3>
+                  {aiReport.weakPoints.map((p, i) => (
+                    <div key={i} className="mb-1 flex items-start gap-2 text-sm text-gray-400">
+                      <span className="mt-0.5 text-red-400">✗</span>{p}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {aiReport.suspiciousActivities.length > 0 && (
+                <div className="mb-4 rounded-xl bg-gray-800 p-4">
+                  <h3 className="mb-3 text-sm font-semibold text-yellow-400">Suspicious Activities</h3>
+                  {aiReport.suspiciousActivities.map((a, i) => (
+                    <div key={i} className="mb-1 flex items-start gap-2 text-sm text-gray-400">
+                      <span className="mt-0.5 text-yellow-400">⚠</span>{a}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {aiReport.courseRecommendations.length > 0 && (
+                <div className="mb-6 rounded-xl bg-gray-800 p-4">
+                  <h3 className="mb-3 text-sm font-semibold text-blue-400">Course Recommendations</h3>
+                  {aiReport.courseRecommendations.map((c, i) => (
+                    <div key={i} className="mb-3 rounded-lg bg-gray-700/50 p-3">
+                      <div className="mb-1 flex items-center justify-between">
+                        <p className="text-sm font-medium text-white">{c.title}</p>
+                        <span className="rounded border border-gray-600 px-2 py-0.5 text-xs text-gray-400">{c.platform}</span>
+                      </div>
+                      <p className="mb-1 text-xs text-gray-400">{c.reason}</p>
+                      <a href={c.url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:underline">
+                        View Course →
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => {
+                    setShowReport(false);
+                    socketRef.current?.emit("leave-room", { roomId, userId: user?.id });
+                    if (peerRef.current) { peerRef.current.close(); }
+                    if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); }
+                    window.location.href = "/dashboard/recruiter";
+                  }}
+                  className="rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white hover:bg-primary/90"
+                >
+                  Go to Dashboard
+                </button>
+                <button
+                  onClick={() => {
+                    const reportText = `InGuard1 Interview Report\n\nScore: ${aiReport.overallScore}/100\nRecommendation: ${aiReport.recommendation}\n\nSummary: ${aiReport.summary}\n\nStrong Points:\n${aiReport.strongPoints.join('\n')}\n\nWeak Points:\n${aiReport.weakPoints.join('\n')}`;
+                    const blob = new Blob([reportText], { type: 'text/plain' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'interview-report.txt';
+                    a.click();
+                  }}
+                  className="rounded-xl border border-gray-600 px-4 py-3 text-sm font-semibold text-white hover:bg-gray-800"
+                >
+                  Download Report
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </main>
   );

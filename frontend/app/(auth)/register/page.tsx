@@ -47,7 +47,7 @@ export default function RegisterPage() {
       }
       const registeredUser = data?.user ?? { name, email, role };
       setAuth(registeredUser, data?.token ?? "");
-      window.location.href = getDashboardPath(role);
+      window.location.href = role === "recruiter" ? "/dashboard/recruiter" : "/dashboard/candidate";
     } catch (err) {
       setError(getErrorMessage(err));
       setIsPending(false);

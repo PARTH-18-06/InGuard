@@ -183,6 +183,8 @@ Score 0-100 based on correctness, depth, and clarity for ${level} level.`;
 
 ${answerSummary}
 
+For courseRecommendations, use YouTube search URLs in the format https://www.youtube.com/results?search_query=TOPIC+tutorial, or link to stable platform homepages like https://www.freecodecamp.org or https://developer.mozilla.org. Do NOT generate specific Udemy or Coursera course URLs since they cannot be verified and often 404.
+
 Return ONLY JSON, no markdown:
 {
   "overallScore": ${avgScore},
@@ -190,9 +192,9 @@ Return ONLY JSON, no markdown:
   "weakPoints": ["weak point 1", "weak point 2", "weak point 3"],
   "strongPoints": ["strong point 1", "strong point 2"],
   "courseRecommendations": [
-    {"title":"Course Name","platform":"Udemy","url":"https://udemy.com","reason":"why this helps"},
-    {"title":"Course Name","platform":"Coursera","url":"https://coursera.org","reason":"why this helps"},
-    {"title":"Course Name","platform":"YouTube","url":"https://youtube.com","reason":"why this helps"}
+    {"title":"Course Name","platform":"YouTube","url":"https://www.youtube.com/results?search_query=COURSE+TOPIC","reason":"why this helps"},
+    {"title":"Course Name","platform":"freeCodeCamp","url":"https://www.freecodecamp.org/news/","reason":"why this helps"},
+    {"title":"Course Name","platform":"MDN Web Docs","url":"https://developer.mozilla.org/en-US/","reason":"why this helps"}
   ]
 }`;
 

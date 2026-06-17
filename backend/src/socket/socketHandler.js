@@ -147,27 +147,27 @@ const setupSocketHandlers = (io) => {
 
       socket.leave(roomId);
       removeParticipantFromRoom(roomId, userId);
-      socket.to(roomId).emit("user-left", { userId });
+      socket.to(roomId).emit("user-left", { userId, role: socket.data?.role });
     });
 
-    socket.on("disconnect", (reason) => {
-      const { roomId, userId } = socket.data || {};
+    socket.on("disconnect", () => {
+      const roomId = socket.data?.roomId;
+      const userId = socket.data?.userId;
+      const role = socket.data?.role;
 
       logSocketEvent("disconnect", {
         socketId: socket.id,
         roomId,
         userId,
-        reason,
+        role,
       });
 
-      if (!roomId || !userId) {
-        return;
-      }
-
-      const participantRemoved = removeParticipantFromRoom(roomId, userId);
-
-      if (participantRemoved) {
-        socket.to(roomId).emit("user-left", { userId });
+      if (roomId) {
+        if (userId) {
+          removeParticipantFromRoom(roomId, userId);
+        }
+        socket.to(roomId).emit("user-left", { userId, role });
+        console.log(`[${new Date().toISOString()}] user-left broadcast for room ${roomId}`);
       }
     });
   });

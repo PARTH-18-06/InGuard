@@ -78,6 +78,7 @@ export default function InterviewRoomPage() {
   const lastAlertTimeRef = useRef<Record<string, number>>({});
   const lastNoiseAlert = useRef<number>(0);
   const sessionAlertsRef = useRef<string[]>([]);
+  const hasCameraErrorRef = useRef(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOn, setIsCameraOn] = useState(true);
   const [focusScore, setFocusScore] = useState(50);
@@ -197,7 +198,12 @@ export default function InterviewRoomPage() {
       }
       if (pc.connectionState === "disconnected" || pc.connectionState === "failed") {
         setPeerConnected(false);
+        setConnectionStatus("error");
         addAlert("⚠️ Peer disconnected", "warning", "peer-disconnected");
+        if (remoteVideoRef.current) {
+          remoteVideoRef.current.srcObject = null;
+        }
+        setRemoteStream(null);
       }
     };
 
@@ -348,25 +354,44 @@ Return ONLY valid JSON, no markdown, no explanation:
 
   useEffect(() => {
     let alreadyHidden = false;
-    const tabInterval = window.setInterval(() => {
+    const fireTabAlert = () => {
+      const sec = durationRef.current % 60;
+      const min = Math.floor(durationRef.current / 60);
+      const ts = min.toString().padStart(2,'0')+':'+sec.toString().padStart(2,'0');
+      setAlerts(prev => {
+        if (prev[0]?.message === '📱 Tab switch detected') return prev;
+        return [
+          { id: String(Date.now()), message: '📱 Tab switch detected', type: 'danger', timestamp: ts },
+          ...prev
+        ].slice(0, 10);
+      });
+      setTrustScore(prev => Math.max(0, prev - 15));
+    };
+
+    const onVisibilityChange = () => {
+      if (document.hidden && !alreadyHidden) {
+        alreadyHidden = true;
+        fireTabAlert();
+      } else if (!document.hidden) {
+        alreadyHidden = false;
+      }
+    };
+
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    const pollInterval = window.setInterval(() => {
       const hidden = document.hidden;
       if (hidden && !alreadyHidden) {
         alreadyHidden = true;
-        console.log('[InGuard] TAB HIDDEN - firing alert');
-        const now = Date.now();
-        const sec = durationRef.current % 60;
-        const min = Math.floor(durationRef.current / 60);
-        const ts = min.toString().padStart(2,'0')+':'+sec.toString().padStart(2,'0');
-        setAlerts(prev => [
-          { id: String(now), message: '📱 Tab switch detected', type: 'danger', timestamp: ts },
-          ...prev
-        ].slice(0, 10));
-        sessionAlertsRef.current.push("Tab switch detected");
-        setTrustScore(prev => Math.max(0, prev - 15));
+        fireTabAlert();
       }
       if (!hidden) alreadyHidden = false;
-    }, 500);
-    return () => window.clearInterval(tabInterval);
+    }, 1000);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.clearInterval(pollInterval);
+    };
   }, []);
 
   useEffect(() => {
@@ -393,7 +418,11 @@ Return ONLY valid JSON, no markdown, no explanation:
     });
     socketRef.current = socket;
 
-    socket.on("connect", () => setConnectionStatus("live"));
+    socket.on("connect", () => {
+      if (!hasCameraErrorRef.current) {
+        setConnectionStatus("live");
+      }
+    });
 
     socket.on("disconnect", () => setConnectionStatus("error"));
 
@@ -472,6 +501,21 @@ Return ONLY valid JSON, no markdown, no explanation:
         } catch (err) {
           console.error("[InGuard] Offer creation failed:", err);
         }
+      }
+    });
+
+    socket.on("user-left", ({ userId, role }) => {
+      console.log("[InGuard] User left:", userId, role);
+      addAlert(`👤 ${role} left the room`, "warning", "user-left");
+      setPeerConnected(false);
+      setConnectionStatus("error");
+      if (remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = null;
+      }
+      setRemoteStream(null);
+      if (peerRef.current) {
+        peerRef.current.close();
+        peerRef.current = null;
       }
     });
 
@@ -637,11 +681,15 @@ Return ONLY valid JSON, no markdown, no explanation:
         const faceapi = await getFaceApi();
         if (!faceapi) return;
 
-        await Promise.all([
-          faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-          faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-          faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL),
-        ]);
+        try {
+          await Promise.all([
+            faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+            faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+            faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL),
+          ]);
+        } catch (modelError) {
+          console.warn("[InGuard] Some AI models failed to load, monitoring may be limited:", modelError);
+        }
 
         if (!isMounted) {
           return;
@@ -657,6 +705,7 @@ Return ONLY valid JSON, no markdown, no explanation:
         setConnectionStatus("error");
         setCameraError("Camera access denied. Please allow camera permissions and refresh.");
         setConnectionStatus("error");
+        hasCameraErrorRef.current = true;
         addAlert(
           "Camera access denied. Please allow camera permissions and refresh.",
           "danger",

@@ -320,14 +320,12 @@ export default function RecruiterDashboardPage() {
           payload
         );
 
-        setJobs((current) =>
-          current.map((job) =>
-            job._id === selectedJob._id ? response.data.data : job
-          )
+        setJobs(prevJobs =>
+          prevJobs.map(j => j._id === selectedJob._id ? response.data.data : j)
         );
       } else {
         const response = await api.post<ApiItemResponse<Job>>("/api/jobs", payload);
-        setJobs((current) => [response.data.data, ...current]);
+        setJobs(prevJobs => [response.data.data, ...prevJobs]);
       }
 
       setJobDialogOpen(false);

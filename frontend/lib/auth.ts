@@ -71,19 +71,17 @@ export const logoutUser = () => {
   }
 };
 
-export const getErrorMessage = (error: unknown) => {
+export function getErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
-    const message =
-      error.response?.data?.message ||
-      error.response?.data?.error ||
-      "Something went wrong. Please try again.";
-
-    return typeof message === "string" ? message : "Something went wrong. Please try again.";
+    const status = error.response?.status;
+    const backendMessage = error.response?.data?.message;
+    if (status === 401 || status === 404) {
+      return backendMessage || "Invalid email or password";
+    }
+    if (backendMessage) return backendMessage;
+    if (error.message === "Network Error") {
+      return "Could not reach the server. Please try again.";
+    }
   }
-
-  if (error instanceof Error) {
-    return error.message;
-  }
-
   return "Something went wrong. Please try again.";
-};
+}

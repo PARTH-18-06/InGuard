@@ -13,6 +13,9 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
+  icons: {
+    icon: "/favicon.svg",
+  },
   title: "InGuard1",
   description: "AI-powered interview platform for recruiters and candidates.",
 };

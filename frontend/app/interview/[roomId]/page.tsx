@@ -79,6 +79,7 @@ export default function InterviewRoomPage() {
   const lastNoiseAlert = useRef<number>(0);
   const sessionAlertsRef = useRef<string[]>([]);
   const hasCameraErrorRef = useRef(false);
+  const alreadyHiddenRef = useRef(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOn, setIsCameraOn] = useState(true);
   const [focusScore, setFocusScore] = useState(50);
@@ -353,7 +354,6 @@ Return ONLY valid JSON, no markdown, no explanation:
   }, []);
 
   useEffect(() => {
-    let alreadyHidden = false;
     const fireTabAlert = () => {
       const sec = durationRef.current % 60;
       const min = Math.floor(durationRef.current / 60);
@@ -369,11 +369,11 @@ Return ONLY valid JSON, no markdown, no explanation:
     };
 
     const onVisibilityChange = () => {
-      if (document.hidden && !alreadyHidden) {
-        alreadyHidden = true;
+      if (document.hidden && !alreadyHiddenRef.current) {
+        alreadyHiddenRef.current = true;
         fireTabAlert();
       } else if (!document.hidden) {
-        alreadyHidden = false;
+        alreadyHiddenRef.current = false;
       }
     };
 
@@ -381,11 +381,11 @@ Return ONLY valid JSON, no markdown, no explanation:
 
     const pollInterval = window.setInterval(() => {
       const hidden = document.hidden;
-      if (hidden && !alreadyHidden) {
-        alreadyHidden = true;
+      if (hidden && !alreadyHiddenRef.current) {
+        alreadyHiddenRef.current = true;
         fireTabAlert();
       }
-      if (!hidden) alreadyHidden = false;
+      if (!hidden) alreadyHiddenRef.current = false;
     }, 1000);
 
     return () => {

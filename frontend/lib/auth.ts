@@ -75,9 +75,8 @@ export function getErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
     const status = error.response?.status;
     const backendMessage = error.response?.data?.message;
-    if (status === 401 || status === 404) {
-      return backendMessage || "Invalid email or password";
-    }
+    if (status === 401) return "Invalid email or password";
+    if (status === 404) return "No account found with that email address.";
     if (backendMessage) return backendMessage;
     if (error.message === "Network Error") {
       return "Could not reach the server. Please try again.";

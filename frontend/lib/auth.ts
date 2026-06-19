@@ -76,10 +76,15 @@ export function getErrorMessage(error: unknown): string {
     const status = error.response?.status;
     const backendMessage = error.response?.data?.message;
     if (status === 401) {
-      if (backendMessage && backendMessage.toLowerCase().includes("not found")) {
+      if (backendMessage && (
+        backendMessage.toLowerCase().includes("not found") ||
+        backendMessage.toLowerCase().includes("no user") ||
+        backendMessage.toLowerCase().includes("does not exist") ||
+        backendMessage.toLowerCase().includes("invalid email")
+      )) {
         return "No account found with that email address.";
       }
-      return backendMessage || "Invalid email or password";
+      return "Invalid email or password";
     }
     if (status === 404) return "No account found with that email address.";
     if (backendMessage) return backendMessage;

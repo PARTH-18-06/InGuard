@@ -3,21 +3,16 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AlertCircle, ArrowRight, ShieldCheck } from "lucide-react";
-import { getDashboardPath, getErrorMessage, registerUser } from "@/lib/auth";
-import { useAuthStore } from "@/store/useAuthStore";
+import { getErrorMessage, registerUser } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 
 export default function RegisterPage() {
-  const { user, isLoggedIn, hydrated } = useAuthStore();
+
   const [error, setError] = useState("");
   const [isPending, setIsPending] = useState(false);
 
-  useEffect(() => {
-    if (hydrated && isLoggedIn && user) {
-      window.location.href = getDashboardPath(user.role);
-    }
-  }, [hydrated, isLoggedIn, user]);
+  // No auto-redirect on register page - let handleSubmit do it directly
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

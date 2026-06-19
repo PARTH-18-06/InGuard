@@ -32,14 +32,30 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `
     (function() {
+      var lastFired = 0;
       function fireTabEvent() {
-        try { window.dispatchEvent(new CustomEvent("inguard-tab-hidden")); } catch(e) {
-          try { var ev = document.createEvent("Event"); ev.initEvent("inguard-tab-hidden",true,true); window.dispatchEvent(ev); } catch(e2) {}
-        }
+        var now = Date.now();
+        if (now - lastFired < 2000) return;
+        lastFired = now;
+        try { window.dispatchEvent(new CustomEvent("inguard-tab-hidden")); } catch(e) {}
       }
-      document.addEventListener("visibilitychange", function() { if (document.hidden) fireTabEvent(); });
-      window.addEventListener("blur", function() { fireTabEvent(); });
-      window.addEventListener("pagehide", function() { fireTabEvent(); });
+      document.addEventListener("visibilitychange", function() {
+        console.log("[InGuard-layout] visibilitychange hidden=" + document.hidden);
+        if (document.hidden) fireTabEvent();
+      });
+      window.addEventListener("blur", function() {
+        console.log("[InGuard-layout] window blur");
+        fireTabEvent();
+      });
+      var wasHidden = false;
+      setInterval(function() {
+        var h = document.hidden;
+        if (h && !wasHidden) {
+          console.log("[InGuard-layout] poll detected hidden");
+          fireTabEvent();
+        }
+        wasHidden = h;
+      }, 500);
     })();
   `,
           }}

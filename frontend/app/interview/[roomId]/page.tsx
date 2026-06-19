@@ -79,7 +79,6 @@ export default function InterviewRoomPage() {
   const lastNoiseAlert = useRef<number>(0);
   const sessionAlertsRef = useRef<string[]>([]);
   const hasCameraErrorRef = useRef(false);
-  const alreadyHiddenRef = useRef(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOn, setIsCameraOn] = useState(true);
   const [focusScore, setFocusScore] = useState(50);
@@ -354,43 +353,42 @@ Return ONLY valid JSON, no markdown, no explanation:
   }, []);
 
   useEffect(() => {
-    const fireTabAlert = () => {
-      const sec = durationRef.current % 60;
-      const min = Math.floor(durationRef.current / 60);
-      const ts = min.toString().padStart(2,'0')+':'+sec.toString().padStart(2,'0');
-      setAlerts(prev => {
-        if (prev[0]?.message === '📱 Tab switch detected') return prev;
-        return [
-          { id: String(Date.now()), message: '📱 Tab switch detected', type: 'danger', timestamp: ts },
-          ...prev
-        ].slice(0, 10);
-      });
-      setTrustScore(prev => Math.max(0, prev - 15));
+    const id = 'inguard_tab_' + Math.random();
+    (window as any)[id] = {
+      setAlerts,
+      setTrustScore,
+      durationRef,
+      lastFired: 0,
     };
 
-    const onVisibilityChange = () => {
-      if (document.hidden && !alreadyHiddenRef.current) {
-        alreadyHiddenRef.current = true;
-        fireTabAlert();
-      } else if (!document.hidden) {
-        alreadyHiddenRef.current = false;
-      }
-    };
-
-    document.addEventListener('visibilitychange', onVisibilityChange);
-
-    const pollInterval = window.setInterval(() => {
-      const hidden = document.hidden;
-      if (hidden && !alreadyHiddenRef.current) {
-        alreadyHiddenRef.current = true;
-        fireTabAlert();
-      }
-      if (!hidden) alreadyHiddenRef.current = false;
-    }, 1000);
+    const script = document.createElement('script');
+    script.textContent = `
+      (function() {
+        var ctx = window['${id}'];
+        var lastFired = 0;
+        function fire() {
+          var now = Date.now();
+          if (now - lastFired < 3000) return;
+          lastFired = now;
+          var dur = ctx.durationRef.current || 0;
+          var s = dur % 60;
+          var m = Math.floor(dur / 60);
+          var ts = String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+          ctx.setAlerts(function(prev) {
+            return [{ id: String(now), message: '📱 Tab switch detected', type: 'danger', timestamp: ts }].concat(prev).slice(0, 10);
+          });
+          ctx.setTrustScore(function(prev) { return Math.max(0, prev - 15); });
+        }
+        document.addEventListener('visibilitychange', function() {
+          if (document.hidden) fire();
+        });
+        window.addEventListener('blur', function() { fire(); });
+      })();
+    `;
+    document.head.appendChild(script);
 
     return () => {
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-      window.clearInterval(pollInterval);
+      delete (window as any)[id];
     };
   }, []);
 
@@ -803,6 +801,18 @@ Return ONLY valid JSON, no markdown, no explanation:
     (window as any).__inguardLastAlertRef = lastAlertTimeRef;
   }
 
+  const displayStatus =
+    connectionStatus === 'error' ? 'Error' :
+    peerConnected ? 'Live' :
+    connectionStatus === 'live' ? 'Waiting' :
+    'Connecting';
+
+  const displayStatusColor =
+    connectionStatus === 'error' ? 'bg-red-500' :
+    peerConnected ? 'bg-green-500' :
+    connectionStatus === 'live' ? 'bg-yellow-500' :
+    'bg-blue-500';
+
   return (
     <main className="min-h-screen bg-gray-950 text-white">
       <div className="grid min-h-screen gap-4 p-4 lg:grid-cols-[60fr_40fr]">
@@ -1047,14 +1057,8 @@ Return ONLY valid JSON, no markdown, no explanation:
               </div>
               <div className="flex items-center justify-between gap-4">
                 <span className="text-gray-400">Status</span>
-                <span className={`px-2 py-1 rounded-full text-xs font-semibold text-white ${
-                  connectionStatus === "live" ? "bg-green-500" :
-                  connectionStatus === "error" ? "bg-red-500" :
-                  "bg-blue-500"
-                }`}>
-                  {connectionStatus === "live" ? "Live" :
-                   connectionStatus === "error" ? "Error" :
-                   "Connecting"}
+                <span className={`px-2 py-1 rounded-full text-xs font-semibold text-white ${displayStatusColor}`}>
+                  {displayStatus}
                 </span>
               </div>
               <div className="flex items-center justify-between gap-4">
@@ -1072,14 +1076,17 @@ Return ONLY valid JSON, no markdown, no explanation:
             <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-gray-900 p-6 shadow-2xl">
               <div className="mb-6 flex items-center justify-between">
                 <h2 className="text-xl font-bold text-white">Interview Report</h2>
-                <div className={`rounded-full px-4 py-1 text-sm font-semibold ${
-                  aiReport.recommendation === "Recommended for next round"
-                    ? "bg-green-500/20 text-green-400"
-                    : aiReport.recommendation === "Not recommended"
-                    ? "bg-red-500/20 text-red-400"
-                    : "bg-yellow-500/20 text-yellow-400"
-                }`}>
-                  {aiReport.recommendation}
+                <div className="flex flex-col items-end gap-1">
+                  <span className="text-xs text-gray-400">Hire Recommendation</span>
+                  <div className={`rounded-full px-4 py-1 text-sm font-semibold ${
+                    aiReport.recommendation === "Recommended for next round"
+                      ? "bg-green-500/20 text-green-400"
+                      : aiReport.recommendation === "Not recommended"
+                      ? "bg-red-500/20 text-red-400"
+                      : "bg-yellow-500/20 text-yellow-400"
+                  }`}>
+                    {aiReport.recommendation}
+                  </div>
                 </div>
               </div>
 

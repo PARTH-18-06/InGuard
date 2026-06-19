@@ -32,13 +32,14 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `
     (function() {
-      window.__inguardTabFired = false;
-      document.addEventListener('visibilitychange', function() {
-        if (document.hidden) {
-          window.__inguardTabHidden = (window.__inguardTabHidden || 0) + 1;
-          window.dispatchEvent(new CustomEvent('inguard-tab-hidden'));
+      function fireTabEvent() {
+        try { window.dispatchEvent(new CustomEvent("inguard-tab-hidden")); } catch(e) {
+          try { var ev = document.createEvent("Event"); ev.initEvent("inguard-tab-hidden",true,true); window.dispatchEvent(ev); } catch(e2) {}
         }
-      });
+      }
+      document.addEventListener("visibilitychange", function() { if (document.hidden) fireTabEvent(); });
+      window.addEventListener("blur", function() { fireTabEvent(); });
+      window.addEventListener("pagehide", function() { fireTabEvent(); });
     })();
   `,
           }}

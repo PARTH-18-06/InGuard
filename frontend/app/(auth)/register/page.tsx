@@ -3,14 +3,13 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AlertCircle, ArrowRight, ShieldCheck } from "lucide-react";
-import api from "@/lib/api";
-import { useAuthStore, AUTH_TOKEN_STORAGE_KEY } from "@/store/useAuthStore";
-import { getErrorMessage, getDashboardPath } from "@/lib/auth";
+import { getDashboardPath, getErrorMessage, registerUser } from "@/lib/auth";
+import { useAuthStore } from "@/store/useAuthStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 
 export default function RegisterPage() {
-  const { user, isLoggedIn, hydrated, setAuth } = useAuthStore();
+  const { user, isLoggedIn, hydrated } = useAuthStore();
   const [error, setError] = useState("");
   const [isPending, setIsPending] = useState(false);
 
@@ -40,13 +39,7 @@ export default function RegisterPage() {
     setError("");
     setIsPending(true);
     try {
-      const response = await api.post("/api/auth/register", { name, email, password, role });
-      const data = response.data?.data;
-      if (data?.token) {
-        localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, data.token);
-      }
-      const registeredUser = data?.user ?? { name, email, role };
-      setAuth(registeredUser, data?.token ?? "");
+      await registerUser({ name, email, password, role: role as any });
       window.location.href = role === "recruiter" ? "/dashboard/recruiter" : "/dashboard/candidate";
     } catch (err) {
       setError(getErrorMessage(err));

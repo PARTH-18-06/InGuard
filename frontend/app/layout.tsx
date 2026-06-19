@@ -28,6 +28,21 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${manrope.variable} ${spaceGrotesk.variable}`}>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+    (function() {
+      window.__inguardTabFired = false;
+      document.addEventListener('visibilitychange', function() {
+        if (document.hidden) {
+          window.__inguardTabHidden = (window.__inguardTabHidden || 0) + 1;
+          window.dispatchEvent(new CustomEvent('inguard-tab-hidden'));
+        }
+      });
+    })();
+  `,
+          }}
+        />
         {children}
       </body>
     </html>
